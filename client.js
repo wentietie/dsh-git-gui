@@ -572,7 +572,7 @@ window.__ModuleLoader__.load({
     }
 
     return {
-      inject: ['slots', 'locale', 'sidebarRightTabs'],
+      inject: ['slots', 'locale'],
       apply(ctx) {
         const disposers = [];
         const report = (stage, detail) => rawReport(stage, detail);
@@ -648,40 +648,6 @@ window.__ModuleLoader__.load({
             return () => {};
           }
         };
-
-        // Right-sidebar tab type: the registry is a declared inject service
-        // (loader guarantees ui-sidebar-right activated first).
-        const tabs = ctx.sidebarRightTabs ?? ctx.get('sidebarRightTabs');
-        if (tabs) {
-          try {
-            disposers.push(
-              tabs.register({
-                id: '@local/dsh-git-gui',
-                kind: 'git-gui',
-                title: () => t('tabTitle'),
-                guide: [{ id: 'git', label: t('tabTitle'), description: t('guideDesc') }],
-              }),
-            );
-            report('tab-type-ok', '');
-          } catch (error) {
-            report('tab-type-failed', (error && error.message) || error);
-          }
-        } else {
-          report('tab-type-missing-service', '');
-        }
-
-        // Right-sidebar tab body: session-scoped keyed slot owned by
-        // ui-sidebar-right; register through slots.inject on the slot itself.
-        disposers.push(
-          safe('rightbar seat', () =>
-            ctx.slots.inject('sidebar.right.pane.tab', () =>
-              ctx.slots.register(
-                { name: 'sidebar.right.pane.tab', key: '@local/dsh-git-gui' },
-                (props) => h(GitPanel, { ...props, ctx, t, getSessionId }),
-              ),
-            ),
-          ),
-        );
 
         // Conversation tab after Chat / Trajectory: shows the session's
         // repository changes. inject(sessionId) supplies the session directly.
