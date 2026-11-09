@@ -647,13 +647,13 @@ window.__ModuleLoader__.load({
           }
         };
 
-        // Right-sidebar tab type and body. `sidebar.right.pane.tab` is declared
-        // by ui-sidebar-right, so wait for its `rightbar` owner through
-        // slots.inject: the callback re-runs whenever the owner reappears, and
-        // by then sidebarRightTabs is registered too.
+        // Right-sidebar tab type and body. `sidebar.right.pane.tab` is a
+        // session-scoped keyed slot declared by ui-sidebar-right: register
+        // through slots.inject on that slot itself, and by the time the
+        // injection runs sidebarRightTabs is available too.
         disposers.push(
           safe('rightbar seat', () =>
-            ctx.slots.inject('rightbar', () => {
+            ctx.slots.inject('sidebar.right.pane.tab', () => {
               const inner = [];
               const tabs = ctx.get('sidebarRightTabs');
               if (tabs) {
@@ -667,10 +667,11 @@ window.__ModuleLoader__.load({
                     }),
                   );
                 } catch (error) {
+                  report('tab-type-failed', (error && error.message) || error);
                   console.error('dsh-git-gui: tab type registration failed:', error);
                 }
               } else {
-                console.error('dsh-git-gui: sidebarRightTabs service unavailable');
+                report('tab-type-missing-service', '');
               }
               inner.push(
                 ctx.slots.register(
