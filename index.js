@@ -199,11 +199,26 @@ function isLoopbackAuthority(hostHeader) {
   );
 }
 
+const debugLogPath = join(dirname(fileURLToPath(import.meta.url)), 'client-debug.log');
+const debugLog = (line) => {
+  try {
+    appendFileSync(debugLogPath, `${new Date().toISOString()} ${line}\n`, 'utf8');
+  } catch {
+    /* diagnostics only */
+  }
+};
+
+export const inject = ['webServer'];
+
 export function apply(ctx) {
   const webServer = ctx.get('webServer');
   const connection = ctx.get('connection');
   const sessions = ctx.get('sessions');
   const workingDirectory = ctx.get('workingDirectory');
+
+  debugLog(
+    `host-apply webServer=${webServer !== undefined} connection=${connection !== undefined} sessions=${sessions !== undefined} workingDirectory=${workingDirectory !== undefined}`,
+  );
 
   if (webServer === undefined) {
     ctx.logger?.warn?.('dsh-git-gui: webServer service unavailable; panel API disabled');
@@ -257,15 +272,6 @@ export function apply(ctx) {
     }
     return { ok: false, error: direct.error };
   }
-
-  const debugLogPath = join(dirname(fileURLToPath(import.meta.url)), 'client-debug.log');
-  const debugLog = (line) => {
-    try {
-      appendFileSync(debugLogPath, `${new Date().toISOString()} ${line}\n`, 'utf8');
-    } catch {
-      /* diagnostics only */
-    }
-  };
 
   async function handle(input, cwd) {
     const action = typeof input.action === 'string' ? input.action : '';
