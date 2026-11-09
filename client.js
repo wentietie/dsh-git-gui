@@ -692,19 +692,26 @@ window.__ModuleLoader__.load({
         );
 
         // Global main-panel entry: left sidebar icon + full-width panel.
+        // These slots are declared by ui-sidebar/ui-layout inside their own
+        // children tables, so registrations ride the owner declaration via
+        // slots.inject (the same pattern the shipped plugins use).
         disposers.push(
           safe('sidebar.panellist', () =>
-            ctx.slots.register(
-              { name: 'sidebar.panellist', id: 'git-gui', order: 20, label: () => t('panelLabel') },
-              PanelIcon,
+            ctx.slots.inject('sidebar.panellist', () =>
+              ctx.slots.register(
+                { name: 'sidebar.panellist', id: 'git-gui', order: 20, label: () => t('panelLabel') },
+                PanelIcon,
+              ),
             ),
           ),
         );
         disposers.push(
           safe('main panel', () =>
-            ctx.slots.register(
-              { name: 'main', key: 'git-gui' },
-              (props) => h(GitPanel, { ...props, ctx, t, getSessionId }),
+            ctx.slots.inject('main', () =>
+              ctx.slots.register(
+                { name: 'main', key: 'git-gui' },
+                (props) => h(GitPanel, { ...props, ctx, t, getSessionId }),
+              ),
             ),
           ),
         );
