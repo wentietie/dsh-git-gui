@@ -246,8 +246,8 @@ export function apply(ctx) {
 
   /**
    * Resolve the repository root for a working directory: the directory itself
-   * when it is inside a work tree, otherwise 鈥?when the session workspace sits
-   * above the checkout 鈥?the single first-level child that is a git repository.
+   * when it is inside a work tree; otherwise, when the session workspace sits
+   * above the checkout, the single first-level child that is a git repository.
    */
   async function resolveRepo(cwd) {
     const direct = await runGit(cwd, ['rev-parse', '--show-toplevel']);
@@ -275,17 +275,19 @@ export function apply(ctx) {
 
   async function handle(input, cwd) {
     const action = typeof input.action === 'string' ? input.action : '';
+
+    // Diagnostics first: never gated on a resolvable working directory or repo.
+    if (action === 'client-report') {
+      debugLog(`client ${JSON.stringify(input.payload ?? input)}`);
+      return { ok: true };
+    }
+
     if (!cwd) return { ok: false, error: 'working directory unknown' };
     if (!isAbsolute(cwd)) return { ok: false, error: `working directory is not absolute: ${cwd}` };
 
     const repo = await resolveRepo(cwd);
     if (!repo.ok) return { ok: false, error: repo.error, notRepo: true };
     const root = repo.root;
-
-    if (action === 'client-report') {
-      debugLog(`client ${JSON.stringify(input.payload ?? input)}`);
-      return { ok: true };
-    }
 
     if (action === 'status') {
       const result = await runGit(root, ['status', '--porcelain=v1', '-z', '-b']);
