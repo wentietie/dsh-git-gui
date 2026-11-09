@@ -2,5 +2,32 @@
   "meta": {
     "title": "Git 修改",
     "description": "右侧边栏的提交面板:查看当前工程的修改列表、diff 对比、暂存与提交信息以及历史提交。"
+  },
+  "gitGui": {
+    "tabTitle": "Git",
+    "panelLabel": "Git 修改",
+    "viewChanges": "变更",
+    "guideDesc": "查看修改、对比 diff 并提交",
+    "refresh": "刷新",
+    "changes": "修改",
+    "history": "历史",
+    "noChanges": "没有修改",
+    "notRepo": "当前目录不是 Git 仓库",
+    "staged": "已暂存",
+    "unstaged": "未暂存",
+    "commitPlaceholder": "提交信息…",
+    "commit": "提交",
+    "amend": "追加",
+    "selectFile": "选择文件查看 diff",
+    "loading": "加载中…",
+    "error": "错误",
+    "selectedCount": "已选",
+    "stage": "暂存",
+    "unstage": "取消暂存",
+    "ahead": "领先",
+    "behind": "落后",
+    "noHistory": "还没有提交",
+    "committing": "提交中…",
+    "nothingStaged": "请选择文件并填写提交信息"
   }
 }

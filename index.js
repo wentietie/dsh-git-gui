@@ -8,7 +8,7 @@
  * bridge applies) before any work runs.
  */
 import { spawn } from 'node:child_process';
-import { appendFileSync, readdirSync, statSync } from 'node:fs';
+import { appendFileSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -248,8 +248,21 @@ export function apply(ctx) {
    * Resolve the repository root for a working directory: the directory itself
    * when it is inside a work tree; otherwise, when the session workspace sits
    * above the checkout, the single first-level child that is a git repository.
+   *
+   * Roots (and misses) are memoized per working directory: without the cache
+   * every request paid an extra sequential `git rev-parse` spawn, which on
+   * Windows dominates the latency of small actions like `diff`.
    */
+  const repoRootCache = new Map(); // cwd -> { ok, root } | { ok: false, error }
   async function resolveRepo(cwd) {
+    const cached = repoRootCache.get(cwd);
+    if (cached) return cached;
+    const resolved = await resolveRepoUncached(cwd);
+    repoRootCache.set(cwd, resolved);
+    return resolved;
+  }
+
+  async function resolveRepoUncached(cwd) {
     const direct = await runGit(cwd, ['rev-parse', '--show-toplevel']);
     if (direct.ok) return { ok: true, root: direct.out.trim() };
     try {
@@ -282,6 +295,25 @@ export function apply(ctx) {
       return { ok: true };
     }
 
+    // UI dictionaries: locale/*.json on disk is the single i18n source of
+    // truth; read fresh per call so linked-directory edits show up on reload.
+    if (action === 'i18n') {
+      const pluginDir = dirname(fileURLToPath(import.meta.url));
+      const load = (language) => {
+        try {
+          const parsed = JSON.parse(
+            readFileSync(join(pluginDir, 'locale', `${language}.json`), 'utf8'),
+          );
+          return parsed && typeof parsed.gitGui === 'object' && parsed.gitGui !== null
+            ? parsed.gitGui
+            : null;
+        } catch {
+          return null;
+        }
+      };
+      return { ok: true, en: load('en'), zh: load('zh') };
+    }
+
     if (!cwd) return { ok: false, error: 'working directory unknown' };
     if (!isAbsolute(cwd)) return { ok: false, error: `working directory is not absolute: ${cwd}` };
 
@@ -298,8 +330,12 @@ export function apply(ctx) {
     if (action === 'diff') {
       const path = safePath(input.path);
       if (!path) return { ok: false, error: 'invalid path' };
-      const unstaged = await runGit(root, ['diff', '--no-color', '--', path]);
-      const staged = await runGit(root, ['diff', '--cached', '--no-color', '--', path]);
+      // Both diffs in parallel: two sequential spawns doubled the perceived
+      // latency on Windows where each git spawn costs a few hundred ms.
+      const [unstaged, staged] = await Promise.all([
+        runGit(root, ['diff', '--no-color', '--no-ext-diff', '--', path]),
+        runGit(root, ['diff', '--cached', '--no-color', '--no-ext-diff', '--', path]),
+      ]);
       return {
         ok: true,
         path,

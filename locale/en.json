@@ -2,5 +2,32 @@
   "meta": {
     "title": "Git changes",
     "description": "Commit panel in the right sidebar: change list, diffs, staging, commit message, and history for the current workspace."
+  },
+  "gitGui": {
+    "tabTitle": "Git",
+    "panelLabel": "Git changes",
+    "viewChanges": "Changes",
+    "guideDesc": "Review changes, diff files, and commit",
+    "refresh": "Refresh",
+    "changes": "Changes",
+    "history": "History",
+    "noChanges": "No changes",
+    "notRepo": "Not a git repository",
+    "staged": "Staged diff",
+    "unstaged": "Unstaged diff",
+    "commitPlaceholder": "Commit message…",
+    "commit": "Commit",
+    "amend": "Amend",
+    "selectFile": "Select a file to view its diff",
+    "loading": "Loading…",
+    "error": "Error",
+    "selectedCount": "selected",
+    "stage": "Stage",
+    "unstage": "Unstage",
+    "ahead": "ahead",
+    "behind": "behind",
+    "noHistory": "No commits yet",
+    "committing": "Committing…",
+    "nothingStaged": "Select files and enter a message"
   }
 }

@@ -10,67 +10,18 @@ window.__ModuleLoader__.load({
   factory(require) {
     const React = require('react');
     const h = React.createElement;
-    const { useState, useEffect, useMemo, useCallback } = React;
+    const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
-    const DICTS = {
-      en: {
-        tabTitle: 'Git',
-        panelLabel: 'Git changes',
-        viewChanges: 'Changes',
-        guideDesc: 'Review changes, diff files, and commit',
-        refresh: 'Refresh',
-        changes: 'Changes',
-        history: 'History',
-        noChanges: 'No changes',
-        notRepo: 'Not a git repository',
-        staged: 'Staged diff',
-        unstaged: 'Unstaged diff',
-        commitPlaceholder: 'Commit message…',
-        commit: 'Commit',
-        amend: 'Amend',
-        selectFile: 'Select a file to view its diff',
-        loading: 'Loading…',
-        error: 'Error',
-        selectedCount: 'selected',
-        stage: 'Stage',
-        unstage: 'Unstage',
-        ahead: 'ahead',
-        behind: 'behind',
-        noHistory: 'No commits yet',
-        committing: 'Committing…',
-        nothingStaged: 'Select files and enter a message',
-      },
-      zh: {
-        tabTitle: 'Git',
-        panelLabel: 'Git 修改',
-        viewChanges: '变更',
-        guideDesc: '查看修改、对比 diff 并提交',
-        refresh: '刷新',
-        changes: '修改',
-        history: '历史',
-        noChanges: '没有修改',
-        notRepo: '当前目录不是 Git 仓库',
-        staged: '已暂存',
-        unstaged: '未暂存',
-        commitPlaceholder: '提交信息…',
-        commit: '提交',
-        amend: '追加',
-        selectFile: '选择文件查看 diff',
-        loading: '加载中…',
-        error: '错误',
-        selectedCount: '已选',
-        stage: '暂存',
-        unstage: '取消暂存',
-        ahead: '领先',
-        behind: '落后',
-        noHistory: '还没有提交',
-        committing: '提交中…',
-        nothingStaged: '请选择文件并填写提交信息',
-      },
-    };
+    // Chinese-only UI: the Host (`i18n` action) serves locale/zh.json from
+    // disk as the single dictionary. Until the fetch resolves (or forever,
+    // when it fails) `t` degrades to raw keys so the panel still renders.
+    // There is no language negotiation, no English fallback, and no
+    // locale-service binding — `t` always reads the zh dict.
+    const dict = { zh: {} };
+    let t = (key) => dict.zh[key] ?? key;
 
     const CSS = `
-.dshg-panel{display:flex;flex-direction:column;height:100%;min-height:0;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font-size:12px;line-height:1.45}
+.dshg-panel{display:flex;flex-direction:column;height:100%;min-height:0;max-height:calc(var(--dsh-conversation-viewport-height,100dvh) - var(--dsh-composer-height,152px));overflow:hidden;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font-size:12px;line-height:1.45}
 .dshg-toolbar{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid var(--dsw-alias-border-l1);flex:none}
 .dshg-branch{font-weight:600;color:var(--dsw-alias-brand-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dshg-tracking{color:var(--dsw-alias-label-secondary);white-space:nowrap}
@@ -84,7 +35,8 @@ window.__ModuleLoader__.load({
 .dshg-tab{font:inherit;padding:3px 10px;border:none;background:none;color:var(--dsw-alias-label-secondary);cursor:pointer;border-bottom:2px solid transparent}
 .dshg-tab-active{color:var(--dsw-alias-label-primary);border-bottom-color:var(--dsw-alias-brand-primary);font-weight:600}
 .dshg-body{flex:1;display:flex;flex-direction:column;min-height:0}
-.dshg-list{flex:1 1 42%;overflow:auto;min-height:60px;border-bottom:1px solid var(--dsw-alias-border-l1)}
+.dshg-main{flex:1;display:flex;flex-direction:row;min-height:0}
+.dshg-list{flex:1 1 34%;min-width:170px;overflow:auto;border-right:1px solid var(--dsw-alias-border-l1)}
 .dshg-row{display:flex;align-items:center;gap:6px;padding:3px 8px;cursor:pointer;white-space:nowrap}
 .dshg-row:hover{background:var(--dsw-alias-bg-layer-1)}
 .dshg-row-active{background:var(--dsw-alias-bg-layer-2)}
@@ -98,18 +50,25 @@ window.__ModuleLoader__.load({
 .dshg-badge-Q{color:var(--dsw-alias-label-secondary)}
 .dshg-path{overflow:hidden;text-overflow:ellipsis;color:var(--dsw-alias-label-primary)}
 .dshg-orig{color:var(--dsw-alias-label-secondary)}
-.dshg-diff{flex:1 1 58%;display:flex;flex-direction:column;min-height:0}
+.dshg-diff{flex:1 1 66%;display:flex;flex-direction:column;min-height:0;min-width:0}
 .dshg-diff-head{display:flex;gap:8px;align-items:center;padding:4px 8px;border-bottom:1px solid var(--dsw-alias-border-l1);flex:none;min-width:0}
 .dshg-diff-toggle{font:inherit;border:none;background:none;color:var(--dsw-alias-label-secondary);cursor:pointer;padding:2px 4px;border-bottom:2px solid transparent}
 .dshg-diff-toggle-active{color:var(--dsw-alias-label-primary);border-bottom-color:var(--dsw-alias-brand-primary)}
 .dshg-diff-path{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
-.dshg-diff-view{flex:1;overflow:auto;margin:0;padding:4px 0;font-family:var(--dsw-mono-font,Consolas,monospace);font-size:11px;white-space:pre;background:var(--dsw-alias-bg-base)}
-.dshg-dln{display:block;padding:0 8px}
-.dshg-dh{color:var(--dsw-alias-label-secondary)}
-.dshg-dm{color:var(--dsw-alias-brand-primary);font-weight:600}
-.dshg-da{color:var(--dsw-alias-state-success-primary)}
-.dshg-dd{color:var(--dsw-alias-state-error-primary)}
-.dshg-commit{flex:none;border-top:1px solid var(--dsw-alias-border-l1);padding:6px 8px;display:flex;flex-direction:column;gap:5px}
+.dshg-diff-view{flex:1;overflow:auto;min-height:0;font-family:var(--dsw-mono-font,Consolas,monospace);font-size:11px;line-height:1.55;background:var(--dsw-alias-bg-base)}
+.dshg-sd-row{display:flex}
+.dshg-sd-cell{flex:1 1 50%;min-width:0;display:flex}
+.dshg-sd-left{border-right:1px solid var(--dsw-alias-border-l2)}
+.dshg-sd-gut{flex:none;width:40px;text-align:right;padding:0 5px;color:var(--dsw-alias-label-secondary);user-select:none;background:color-mix(in srgb,var(--dsw-alias-label-secondary) 8%,transparent)}
+.dshg-sd-txt{flex:1;min-width:0;padding:0 8px;white-space:pre-wrap;overflow-wrap:break-word;word-break:break-all}
+.dshg-sd-del{background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 13%,transparent)}
+.dshg-sd-add{background:color-mix(in srgb,var(--dsw-alias-state-success-primary) 13%,transparent)}
+.dshg-sd-empty{background:color-mix(in srgb,var(--dsw-alias-label-secondary) 5%,transparent)}
+.dshg-sd-mark-del{background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 32%,transparent);border-radius:2px}
+.dshg-sd-mark-add{background:color-mix(in srgb,var(--dsw-alias-state-success-primary) 32%,transparent);border-radius:2px}
+.dshg-sd-sep{padding:2px 8px;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-bg-layer-1);white-space:pre-wrap;overflow-wrap:break-word}
+.dshg-sd-hunk{color:var(--dsw-alias-brand-primary)}
+.dshg-commit{flex:none;margin-top:auto;border-top:1px solid var(--dsw-alias-border-l1);padding:6px 8px;display:flex;flex-direction:column;gap:5px}
 .dshg-msg{font:inherit;width:100%;box-sizing:border-box;resize:vertical;min-height:44px;max-height:120px;padding:4px 6px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:6px}
 .dshg-commit-row{display:flex;align-items:center;gap:6px}
 .dshg-commit-row label{display:flex;align-items:center;gap:3px;color:var(--dsw-alias-label-secondary);cursor:pointer}
@@ -169,18 +128,169 @@ window.__ModuleLoader__.load({
       return letter;
     }
 
+    /**
+     * Parse a unified diff into aligned side-by-side rows:
+     * - {kind:'sep', cls, text}  file/hunk header band across both sides
+     * - {kind:'ctx', oldNo, newNo, text}          identical line on both sides
+     * - {kind:'del', oldNo, left}                 removed line, left only
+     * - {kind:'add', newNo, right}                added line, right only
+     * - {kind:'pair', oldNo, newNo, left, right}  replaced line, both sides
+     * Consecutive '-' and '+' runs are paired index-by-index (IDEA-style
+     * alignment); leftovers render single-sided with an empty opposite cell.
+     */
+    function splitDiffRows(diff) {
+      const rows = [];
+      if (!diff) return rows;
+      const lines = diff.split('\n');
+      let oldNo = 0;
+      let newNo = 0;
+      let i = 0;
+      while (i < lines.length) {
+        const line = lines[i];
+        if (!line) {
+          i += 1;
+          continue;
+        }
+        if (line.startsWith('@@')) {
+          const m = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+          if (m) {
+            oldNo = Number(m[1]);
+            newNo = Number(m[2]);
+          }
+          rows.push({ kind: 'sep', cls: 'dshg-sd-hunk', text: line });
+          i += 1;
+          continue;
+        }
+        if (
+          line.startsWith('diff ') ||
+          line.startsWith('index ') ||
+          line.startsWith('--- ') ||
+          line.startsWith('+++ ') ||
+          line.startsWith('new file') ||
+          line.startsWith('deleted file') ||
+          line.startsWith('Binary files') ||
+          line.startsWith('old mode') ||
+          line.startsWith('new mode') ||
+          line.startsWith('similarity index') ||
+          line.startsWith('rename from') ||
+          line.startsWith('rename to')
+        ) {
+          rows.push({ kind: 'sep', cls: '', text: line });
+          i += 1;
+          continue;
+        }
+        if (line.startsWith('\\')) {
+          // "\ No newline at end of file" — visual noise in split view.
+          i += 1;
+          continue;
+        }
+        if (line.startsWith('-')) {
+          const dels = [];
+          while (i < lines.length && lines[i].startsWith('-') && !lines[i].startsWith('--- ')) {
+            dels.push(lines[i].slice(1));
+            i += 1;
+          }
+          const adds = [];
+          while (i < lines.length && lines[i].startsWith('+') && !lines[i].startsWith('+++ ')) {
+            adds.push(lines[i].slice(1));
+            i += 1;
+          }
+          const pairs = Math.min(dels.length, adds.length);
+          for (let k = 0; k < dels.length || k < adds.length; k += 1) {
+            if (k < pairs) {
+              rows.push({ kind: 'pair', oldNo: oldNo + k, newNo: newNo + k, left: dels[k], right: adds[k] });
+            } else if (k < dels.length) {
+              rows.push({ kind: 'del', oldNo: oldNo + k, left: dels[k] });
+            } else {
+              rows.push({ kind: 'add', newNo: newNo + k, right: adds[k] });
+            }
+          }
+          oldNo += dels.length;
+          newNo += adds.length;
+          continue;
+        }
+        if (line.startsWith('+')) {
+          rows.push({ kind: 'add', newNo, right: line.slice(1) });
+          newNo += 1;
+          i += 1;
+          continue;
+        }
+        rows.push({ kind: 'ctx', oldNo, newNo, text: line.startsWith(' ') ? line.slice(1) : line });
+        oldNo += 1;
+        newNo += 1;
+        i += 1;
+      }
+      return rows;
+    }
+
+    /** Intra-line change highlight: mark the differing middle of a pair. */
+    function markPair(left, right) {
+      const n = Math.min(left.length, right.length);
+      let p = 0;
+      while (p < n && left[p] === right[p]) p += 1;
+      let s = 0;
+      while (s < n - p && left[left.length - 1 - s] === right[right.length - 1 - s]) s += 1;
+      return {
+        left: [left.slice(0, p), left.slice(p, left.length - s), left.slice(left.length - s)],
+        right: [right.slice(0, p), right.slice(p, right.length - s), right.slice(right.length - s)],
+      };
+    }
+
     function DiffView({ diff }) {
-      const lines = useMemo(() => (diff ? diff.split('\n') : []), [diff]);
+      const rows = useMemo(() => splitDiffRows(diff), [diff]);
+      const cell = (no, children, extra) =>
+        h(
+          'span',
+          { className: `dshg-sd-cell ${extra || ''}` },
+          h('span', { className: 'dshg-sd-gut' }, no ?? ''),
+          h('span', { className: 'dshg-sd-txt' }, children),
+        );
+      const marked = (mark, side) => {
+        const cls = side === 'left' ? 'dshg-sd-mark-del' : 'dshg-sd-mark-add';
+        return [
+          mark[side][0],
+          mark[side][1] ? h('span', { key: 'm', className: cls }, mark[side][1]) : null,
+          mark[side][2],
+        ];
+      };
       return h(
-        'pre',
+        'div',
         { className: 'dshg-diff-view' },
-        lines.map((line, index) => {
-          let cls = 'dshg-dln';
-          if (line.startsWith('@@')) cls += ' dshg-dm';
-          else if (line.startsWith('+')) cls += ' dshg-da';
-          else if (line.startsWith('-')) cls += ' dshg-dd';
-          else if (line.startsWith('diff ') || line.startsWith('index ')) cls += ' dshg-dh';
-          return h('span', { key: index, className: cls }, line + '\n');
+        rows.map((row, index) => {
+          if (row.kind === 'sep') {
+            return h('div', { key: index, className: `dshg-sd-sep ${row.cls}` }, row.text);
+          }
+          if (row.kind === 'ctx') {
+            return h(
+              'div',
+              { key: index, className: 'dshg-sd-row' },
+              cell(row.oldNo, row.text, 'dshg-sd-left'),
+              cell(row.newNo, row.text, ''),
+            );
+          }
+          if (row.kind === 'del') {
+            return h(
+              'div',
+              { key: index, className: 'dshg-sd-row' },
+              cell(row.oldNo, row.left, 'dshg-sd-left dshg-sd-del'),
+              cell(null, null, 'dshg-sd-empty'),
+            );
+          }
+          if (row.kind === 'add') {
+            return h(
+              'div',
+              { key: index, className: 'dshg-sd-row' },
+              cell(null, null, 'dshg-sd-left dshg-sd-empty'),
+              cell(row.newNo, row.right, 'dshg-sd-add'),
+            );
+          }
+          const mark = markPair(row.left, row.right);
+          return h(
+            'div',
+            { key: index, className: 'dshg-sd-row' },
+            cell(row.oldNo, marked(mark, 'left'), 'dshg-sd-left dshg-sd-del'),
+            cell(row.newNo, marked(mark, 'right'), 'dshg-sd-add'),
+          );
         }),
       );
     }
@@ -247,13 +357,16 @@ window.__ModuleLoader__.load({
         if (view === 'history') loadLog();
       }, [view, loadLog]);
 
+      const diffToken = useRef(0);
       const selectFile = useCallback(
         async (path) => {
+          const token = ++diffToken.current;
           setSelected(path);
           setDiff(null);
           setError(null);
           try {
             const result = await api({ action: 'diff', sessionId: sessionId(), path });
+            if (token !== diffToken.current) return; // a newer selection superseded this diff
             if (result.ok) {
               setDiff({ staged: result.staged, unstaged: result.unstaged });
               setDiffMode(result.unstaged ? 'unstaged' : 'staged');
@@ -261,7 +374,7 @@ window.__ModuleLoader__.load({
               setError(result.error);
             }
           } catch (e) {
-            setError(String((e && e.message) || e));
+            if (token === diffToken.current) setError(String((e && e.message) || e));
           }
         },
         [sessionId],
@@ -291,13 +404,17 @@ window.__ModuleLoader__.load({
               paths,
             });
             if (!result.ok) setError(result.error);
-            await refresh(true);
-            if (selected) {
-              const again = await api({ action: 'diff', sessionId: sessionId(), path: selected });
-              if (again.ok) {
-                setDiff({ staged: again.staged, unstaged: again.unstaged });
-                setDiffMode(again.unstaged ? 'unstaged' : 'staged');
-              }
+            // Status and the refreshed diff are independent requests: run
+            // them in parallel instead of paying both latencies in series.
+            const [, again] = await Promise.all([
+              refresh(true),
+              selected
+                ? api({ action: 'diff', sessionId: sessionId(), path: selected }).catch(() => null)
+                : Promise.resolve(null),
+            ]);
+            if (again && again.ok) {
+              setDiff({ staged: again.staged, unstaged: again.unstaged });
+              setDiffMode(again.unstaged ? 'unstaged' : 'staged');
             }
           } catch (e) {
             setError(String((e && e.message) || e));
@@ -396,9 +513,14 @@ window.__ModuleLoader__.load({
           ? h(
               'div',
               { className: 'dshg-body' },
+              // Left-right split: change list on the left, diff on the right;
+              // the commit box below spans the full width.
               h(
                 'div',
-                { className: 'dshg-list' },
+                { className: 'dshg-main' },
+                h(
+                  'div',
+                  { className: 'dshg-list' },
                 files.length === 0 && status && status.ok
                   ? h('div', { className: 'dshg-muted' }, t('noChanges'))
                   : null,
@@ -495,6 +617,7 @@ window.__ModuleLoader__.load({
                   : selected && !activeDiff
                     ? h('div', { className: 'dshg-muted' }, t('noChanges'))
                     : h(DiffView, { diff: activeDiff }),
+                ),
               ),
               h(
                 'div',
@@ -572,31 +695,29 @@ window.__ModuleLoader__.load({
     }
 
     return {
-      inject: ['slots', 'locale'],
+      inject: ['slots'],
       apply(ctx) {
         const disposers = [];
+        let disposed = false;
         const report = (stage, detail) => rawReport(stage, detail);
         report('apply-enter', `has-slots=${Boolean(ctx.get('slots'))}`);
-        const locale = ctx.get('locale');
-        let t = (key) => DICTS.en[key] ?? key;
-        if (locale) {
-          for (const [language, dict] of Object.entries(DICTS)) {
-            try {
-              disposers.push(locale.register('gitGui', language, dict));
-            } catch {
-              /* non-fatal */
-            }
-          }
+
+        // Fetch the zh dictionary from the Host first so the UI registers
+        // with translations already in place; a failed fetch only degrades
+        // `t` to raw keys, never blocks mounting the panel. The dictionary
+        // is deliberately NOT registered into the locale service: binding
+        // would let the GUI language setting switch the panel back to
+        // English, and this plugin is Chinese-only.
+        const initLocale = async () => {
           try {
-            const bound = locale.bind('gitGui');
-            t = (key) => {
-              const value = bound(key);
-              return typeof value === 'string' ? value : DICTS.en[key] ?? key;
-            };
-          } catch {
-            /* keep fallback */
+            const result = await api({ action: 'i18n' });
+            const value = result && result.zh;
+            if (value && typeof value === 'object') dict.zh = value;
+            report('i18n-loaded', `zh=${Object.keys(dict.zh).length}`);
+          } catch (error) {
+            report('i18n-failed', (error && error.message) || error);
           }
-        }
+        };
 
         // Track the on-screen session continuously. sidebarRight.mounted reports
         // undefined while any main panel (including ours) is active, so remember
@@ -651,32 +772,39 @@ window.__ModuleLoader__.load({
 
         // Conversation tab after Chat / Trajectory: shows the session's
         // repository changes. inject(sessionId) supplies the session directly.
-        disposers.push(
-          safe('conversation.view tab', () =>
-            ctx.slots.inject(
-              'conversation.view',
-              () =>
-                ctx.slots.register(
-                  {
-                    name: 'conversation.view',
-                    id: 'git-changes',
-                    order: 30,
-                    label: () => t('viewChanges'),
-                    inject: (sessionId) => ({ gitSessionId: sessionId }),
-                  },
-                  (props) =>
-                    h(GitPanel, {
-                      ...props,
-                      ctx,
-                      t,
-                      getSessionId: () => props.gitSessionId ?? getSessionId(),
-                    }),
-                ),
+        // Registration waits for the i18n fetch so the tab label and panel
+        // mount with translations resolved.
+        const registerUi = () => {
+          if (disposed) return;
+          disposers.push(
+            safe('conversation.view tab', () =>
+              ctx.slots.inject(
+                'conversation.view',
+                () =>
+                  ctx.slots.register(
+                    {
+                      name: 'conversation.view',
+                      id: 'git-changes',
+                      order: 30,
+                      label: () => t('viewChanges'),
+                      inject: (sessionId) => ({ gitSessionId: sessionId }),
+                    },
+                    (props) =>
+                      h(GitPanel, {
+                        ...props,
+                        ctx,
+                        t,
+                        getSessionId: () => props.gitSessionId ?? getSessionId(),
+                      }),
+                  ),
+              ),
             ),
-          ),
-        );
+          );
+        };
+        initLocale().then(registerUi, registerUi);
 
         return () => {
+          disposed = true;
           report('dispose', '');
           for (const dispose of disposers) {
             try {
