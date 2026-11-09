@@ -111,6 +111,7 @@ window.__ModuleLoader__.load({
 .dshg-commit-row label{display:flex;align-items:center;gap:3px;color:var(--dsw-alias-label-secondary);cursor:pointer}
 .dshg-note{color:var(--dsw-alias-label-secondary)}
 .dshg-error{color:var(--dsw-alias-state-error-primary);white-space:pre-wrap}
+.dshg-rootline{padding:2px 8px;font-size:11px;border-bottom:1px solid var(--dsw-alias-border-l1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dshg-muted{padding:10px 8px;color:var(--dsw-alias-label-secondary)}
 .dshg-log-row{padding:4px 8px;border-bottom:1px solid var(--dsw-alias-border-l1)}
 .dshg-log-subject{color:var(--dsw-alias-label-primary)}
@@ -164,7 +165,7 @@ window.__ModuleLoader__.load({
       );
     }
 
-    function GitPanel({ ctx, t }) {
+    function GitPanel({ ctx, t, getSessionId }) {
       const [view, setView] = useState('changes');
       const [status, setStatus] = useState(null); // {ok, branch, files, ...}
       const [commits, setCommits] = useState([]);
@@ -180,18 +181,11 @@ window.__ModuleLoader__.load({
 
       const sessionId = useCallback(() => {
         try {
-          const sidebarRight = ctx.get('sidebarRight');
-          const mounted = sidebarRight && sidebarRight.mounted;
-          let value;
-          if (mounted && typeof mounted.get === 'function') value = mounted.get();
-          else if (typeof mounted === 'function') value = mounted();
-          else value = mounted;
-          if (value == null) return undefined;
-          return typeof value === 'string' ? value : value.id ?? value.sessionId ?? undefined;
+          return getSessionId ? getSessionId() : undefined;
         } catch {
           return undefined;
         }
-      }, [ctx]);
+      }, [getSessionId]);
 
       const refresh = useCallback(
         async (keepSelection) => {
@@ -333,7 +327,8 @@ window.__ModuleLoader__.load({
         h(
           'div',
           { className: 'dshg-toolbar' },
-          h('span', { className: 'dshg-branch' }, status && status.ok ? status.branch || 'Git' : 'Git'),
+          h('span', { className: 'dshg-branch', title: status && status.ok ? status.root || '' : '' },
+            status && status.ok ? status.branch || 'Git' : 'Git'),
           status && status.ok && status.upstream
             ? h(
                 'span',
@@ -370,8 +365,11 @@ window.__ModuleLoader__.load({
             t('history'),
           ),
         ),
+        status && status.ok && status.root
+          ? h('div', { className: 'dshg-muted dshg-rootline', title: status.root }, status.root)
+          : null,
         status && !status.ok
-          ? h('div', { className: 'dshg-muted' }, status.notRepo ? t('notRepo') : `${t('error')}: ${status.error}`)
+          ? h('div', { className: 'dshg-muted' }, status.notRepo ? `${t('notRepo')}: ${status.root || ''}` : `${t('error')}: ${status.error}`)
           : null,
         error ? h('div', { className: 'dshg-muted dshg-error' }, error) : null,
         view === 'changes'
@@ -578,6 +576,43 @@ window.__ModuleLoader__.load({
           }
         }
 
+        // Track the on-screen session continuously. sidebarRight.mounted reports
+        // undefined while any main panel (including ours) is active, so remember
+        // the last non-undefined session id at the plugin level.
+        let lastSessionId;
+        const sidebarRight = ctx.get('sidebarRight');
+        const mounted = sidebarRight && sidebarRight.mounted;
+        const readMounted = () => {
+          try {
+            if (!mounted) return undefined;
+            if (typeof mounted.getSnapshot === 'function') return mounted.getSnapshot();
+            if (typeof mounted.get === 'function') return mounted.get();
+            if (typeof mounted === 'function') return mounted();
+            return mounted;
+          } catch {
+            return undefined;
+          }
+        };
+        const applyMounted = () => {
+          const value = readMounted();
+          if (typeof value === 'string' && value) lastSessionId = value;
+          else if (value && typeof value === 'object' && typeof value.id === 'string') {
+            lastSessionId = value.id;
+          }
+        };
+        applyMounted();
+        if (mounted && typeof mounted.subscribe === 'function') {
+          try {
+            disposers.push(mounted.subscribe(applyMounted));
+          } catch {
+            /* best-effort */
+          }
+        }
+        const getSessionId = () => {
+          applyMounted();
+          return lastSessionId;
+        };
+
         const tabs = ctx.get('sidebarRightTabs');
         if (tabs) {
           disposers.push(
@@ -595,7 +630,7 @@ window.__ModuleLoader__.load({
         disposers.push(
           ctx.slots.register(
             { name: 'sidebar.right.pane.tab', key: '@local/dsh-git-gui' },
-            (props) => h(GitPanel, { ...props, ctx, t }),
+            (props) => h(GitPanel, { ...props, ctx, t, getSessionId }),
           ),
         );
 
@@ -609,7 +644,7 @@ window.__ModuleLoader__.load({
         disposers.push(
           ctx.slots.register(
             { name: 'main', key: 'git-gui' },
-            (props) => h(GitPanel, { ...props, ctx, t }),
+            (props) => h(GitPanel, { ...props, ctx, t, getSessionId }),
           ),
         );
 

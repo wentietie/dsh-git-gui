@@ -8,6 +8,8 @@
  * bridge applies) before any work runs.
  */
 import { spawn } from 'node:child_process';
+import { readdirSync, statSync } from 'node:fs';
+import { isAbsolute, join } from 'node:path';
 
 const MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
 const MAX_ERR_BYTES = 64 * 1024;
@@ -226,24 +228,55 @@ export function apply(ctx) {
     return undefined;
   }
 
+  /**
+   * Resolve the repository root for a working directory: the directory itself
+   * when it is inside a work tree, otherwise 鈥?when the session workspace sits
+   * above the checkout 鈥?the single first-level child that is a git repository.
+   */
+  async function resolveRepo(cwd) {
+    const direct = await runGit(cwd, ['rev-parse', '--show-toplevel']);
+    if (direct.ok) return { ok: true, root: direct.out.trim() };
+    try {
+      const children = readdirSync(cwd, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
+        .map((entry) => join(cwd, entry.name))
+        .filter((child) => {
+          try {
+            return statSync(join(child, '.git')).isDirectory() || statSync(join(child, '.git')).isFile();
+          } catch {
+            return false;
+          }
+        });
+      if (children.length === 1) {
+        const child = await runGit(children[0], ['rev-parse', '--show-toplevel']);
+        if (child.ok) return { ok: true, root: child.out.trim() };
+      }
+    } catch {
+      /* keep the direct failure */
+    }
+    return { ok: false, error: direct.error };
+  }
+
   async function handle(input, cwd) {
     const action = typeof input.action === 'string' ? input.action : '';
     if (!cwd) return { ok: false, error: 'working directory unknown' };
+    if (!isAbsolute(cwd)) return { ok: false, error: `working directory is not absolute: ${cwd}` };
 
-    const repo = await runGit(cwd, ['rev-parse', '--show-toplevel']);
+    const repo = await resolveRepo(cwd);
     if (!repo.ok) return { ok: false, error: repo.error, notRepo: true };
+    const root = repo.root;
 
     if (action === 'status') {
-      const result = await runGit(cwd, ['status', '--porcelain=v1', '-z', '-b']);
+      const result = await runGit(root, ['status', '--porcelain=v1', '-z', '-b']);
       if (!result.ok) return { ok: false, error: result.error };
-      return { ok: true, root: cwd, ...parseStatus(result.out) };
+      return { ok: true, root, ...parseStatus(result.out) };
     }
 
     if (action === 'diff') {
       const path = safePath(input.path);
       if (!path) return { ok: false, error: 'invalid path' };
-      const unstaged = await runGit(cwd, ['diff', '--no-color', '--', path]);
-      const staged = await runGit(cwd, ['diff', '--cached', '--no-color', '--', path]);
+      const unstaged = await runGit(root, ['diff', '--no-color', '--', path]);
+      const staged = await runGit(root, ['diff', '--cached', '--no-color', '--', path]);
       return {
         ok: true,
         path,
@@ -253,7 +286,7 @@ export function apply(ctx) {
     }
 
     if (action === 'log') {
-      const result = await runGit(cwd, [
+      const result = await runGit(root, [
         'log',
         '-n',
         '20',
@@ -271,13 +304,13 @@ export function apply(ctx) {
         return { ok: false, error: 'invalid paths' };
       }
       if (action === 'stage') {
-        const result = await runGit(cwd, ['add', '--', ...paths]);
+        const result = await runGit(root, ['add', '--', ...paths]);
         return result.ok ? { ok: true } : { ok: false, error: result.error };
       }
-      let result = await runGit(cwd, ['reset', '-q', 'HEAD', '--', ...paths]);
+      let result = await runGit(root, ['reset', '-q', 'HEAD', '--', ...paths]);
       if (!result.ok) {
         // Repository without any commit yet: unstage = remove from the index.
-        result = await runGit(cwd, ['rm', '--cached', '-q', '-r', '--', ...paths]);
+        result = await runGit(root, ['rm', '--cached', '-q', '-r', '--', ...paths]);
       }
       return result.ok ? { ok: true } : { ok: false, error: result.error };
     }
@@ -289,12 +322,12 @@ export function apply(ctx) {
       const paths = raw.map(safePath).filter((value) => value !== null);
       if (paths.length > MAX_PATHS) return { ok: false, error: 'invalid paths' };
       if (paths.length > 0) {
-        const added = await runGit(cwd, ['add', '--', ...paths]);
+        const added = await runGit(root, ['add', '--', ...paths]);
         if (!added.ok) return { ok: false, error: added.error };
       }
       const args = ['commit', '-m', message];
       if (input.amend === true) args.push('--amend');
-      const result = await runGit(cwd, args);
+      const result = await runGit(root, args);
       if (!result.ok) return { ok: false, error: result.error };
       return { ok: true };
     }
@@ -366,6 +399,10 @@ export function apply(ctx) {
 
         const cwd = await resolveCwd(input.sessionId);
         const result = await handle(input, cwd);
+        if (result && typeof result === 'object') {
+          result.sessionId = typeof input.sessionId === 'string' ? input.sessionId : null;
+          result.cwd = cwd ?? null;
+        }
         send(200, result);
       } catch (error) {
         send(200, { ok: false, error: String((error && error.message) || error) });
