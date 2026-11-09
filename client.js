@@ -132,6 +132,22 @@ window.__ModuleLoader__.load({
       return res.json();
     }
 
+    const rawReport = (stage, detail) => {
+      try {
+        fetch('/dsh-git-gui/api', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            action: 'client-report',
+            payload: { stage, detail: String(detail ?? '') },
+          }),
+        }).catch(() => {});
+      } catch {
+        /* diagnostics only */
+      }
+    };
+    rawReport('module-load', typeof window !== 'undefined' ? location.pathname : 'no-window');
+
     function badgeClass(entry) {
       const letter =
         entry.y && entry.y !== ' ' ? entry.y : entry.x && entry.x !== ' ' ? entry.x : '?';
@@ -557,13 +573,7 @@ window.__ModuleLoader__.load({
       inject: ['slots'],
       apply(ctx) {
         const disposers = [];
-        const report = (stage, detail) => {
-          try {
-            api({ action: 'client-report', payload: { stage, detail: String(detail ?? '') } });
-          } catch {
-            /* diagnostics only */
-          }
-        };
+        const report = (stage, detail) => rawReport(stage, detail);
         report('apply-enter', `has-slots=${Boolean(ctx.get('slots'))}`);
         const locale = ctx.get('locale');
         let t = (key) => DICTS.en[key] ?? key;

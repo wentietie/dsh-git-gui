@@ -258,6 +258,15 @@ export function apply(ctx) {
     return { ok: false, error: direct.error };
   }
 
+  const debugLogPath = join(dirname(fileURLToPath(import.meta.url)), 'client-debug.log');
+  const debugLog = (line) => {
+    try {
+      appendFileSync(debugLogPath, `${new Date().toISOString()} ${line}\n`, 'utf8');
+    } catch {
+      /* diagnostics only */
+    }
+  };
+
   async function handle(input, cwd) {
     const action = typeof input.action === 'string' ? input.action : '';
     if (!cwd) return { ok: false, error: 'working directory unknown' };
@@ -268,16 +277,7 @@ export function apply(ctx) {
     const root = repo.root;
 
     if (action === 'client-report') {
-      try {
-        const logPath = join(dirname(fileURLToPath(import.meta.url)), 'client-debug.log');
-        appendFileSync(
-          logPath,
-          `${new Date().toISOString()} ${JSON.stringify(input.payload ?? input)}\n`,
-          'utf8',
-        );
-      } catch {
-        /* diagnostics only */
-      }
+      debugLog(`client ${JSON.stringify(input.payload ?? input)}`);
       return { ok: true };
     }
 
@@ -373,36 +373,6 @@ export function apply(ctx) {
           return;
         }
 
-        // Authenticate the browser request with the shared trust fence.
-        let authorized = false;
-        if (connection && typeof connection.admit === 'function') {
-          try {
-            const headers = new Headers();
-            for (const [name, value] of Object.entries(req.headers)) {
-              for (const item of typeof value === 'string' ? [value] : value ?? []) {
-                headers.append(name, item);
-              }
-            }
-            const request = new Request(
-              `http://${req.headers.host ?? '127.0.0.1'}${req.url ?? '/'}`,
-              { method: 'POST', headers },
-            );
-            const admission = connection.admit(request);
-            if (admission && admission.rejection) authorized = false;
-            else if (admission && admission.peer) authorized = true;
-            else if (admission && typeof admission.principal === 'string') authorized = true;
-            else authorized = admission != null;
-          } catch {
-            authorized = false;
-          }
-        } else {
-          authorized = isLoopbackAuthority(req.headers.host);
-        }
-        if (!authorized) {
-          send(401, { ok: false, error: 'unauthorized' });
-          return;
-        }
-
         const bodyText = await readBody(req, 1024 * 1024);
         let input = {};
         try {
@@ -410,6 +380,43 @@ export function apply(ctx) {
         } catch {
           send(200, { ok: false, error: 'invalid JSON body' });
           return;
+        }
+        const action = typeof input.action === 'string' ? input.action : '';
+
+        // client-report only appends a local debug line, so it stays exempt
+        // from authentication: client-side diagnostics must survive auth
+        // problems to be useful.
+        if (action !== 'client-report') {
+          // Authenticate the browser request with the shared trust fence.
+          let authorized = false;
+          if (connection && typeof connection.admit === 'function') {
+            try {
+              const headers = new Headers();
+              for (const [name, value] of Object.entries(req.headers)) {
+                for (const item of typeof value === 'string' ? [value] : value ?? []) {
+                  headers.append(name, item);
+                }
+              }
+              const request = new Request(
+                `http://${req.headers.host ?? '127.0.0.1'}${req.url ?? '/'}`,
+                { method: 'POST', headers },
+              );
+              const admission = connection.admit(request);
+              if (admission && admission.rejection) authorized = false;
+              else if (admission && admission.peer) authorized = true;
+              else if (admission && typeof admission.principal === 'string') authorized = true;
+              else authorized = admission != null;
+            } catch {
+              authorized = false;
+            }
+          } else {
+            authorized = isLoopbackAuthority(req.headers.host);
+          }
+          if (!authorized) {
+            debugLog(`auth-rejected action=${action} url=${String(req.url)}`);
+            send(401, { ok: false, error: 'unauthorized' });
+            return;
+          }
         }
 
         const cwd = await resolveCwd(input.sessionId);
