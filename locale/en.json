@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Git changes",
+    "description": "Commit panel in the right sidebar: change list, diffs, staging, commit message, and history for the current workspace."
+  }
+}

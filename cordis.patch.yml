@@ -1,0 +1,4 @@
+- insert:
+    - id: git-gui
+      name: '@local/dsh-git-gui'
+      config: {}
