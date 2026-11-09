@@ -76,6 +76,8 @@ window.__ModuleLoader__.load({
 .dshg-btn:hover{background:var(--dsw-alias-bg-layer-2)}
 .dshg-btn:disabled{opacity:.5;cursor:default}
 .dshg-btn-primary{background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:#fff}
+.dshg-btn-primary:hover{background:var(--dsw-alias-brand-primary);filter:brightness(1.1)}
+.dshg-btn-primary:disabled{opacity:.5;filter:none}
 .dshg-tabs{display:flex;gap:2px;padding:4px 8px 0;border-bottom:1px solid var(--dsw-alias-border-l1);flex:none}
 .dshg-tab{font:inherit;padding:3px 10px;border:none;background:none;color:var(--dsw-alias-label-secondary);cursor:pointer;border-bottom:2px solid transparent}
 .dshg-tab-active{color:var(--dsw-alias-label-primary);border-bottom-color:var(--dsw-alias-brand-primary);font-weight:600}
