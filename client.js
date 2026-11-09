@@ -615,38 +615,77 @@ window.__ModuleLoader__.load({
           return lastSessionId;
         };
 
-        const tabs = ctx.get('sidebarRightTabs');
-        if (tabs) {
-          disposers.push(
-            tabs.register({
-              id: '@local/dsh-git-gui',
-              kind: 'git-gui',
-              title: () => t('tabTitle'),
-              guide: [{ id: 'git', label: t('tabTitle'), description: t('guideDesc') }],
-            }),
-          );
-        } else {
-          console.error('dsh-git-gui: sidebarRightTabs service unavailable');
-        }
+        // Registration helper: a missing parent slot declaration or service
+        // must never fail plugin activation (it breaks the whole web boot).
+        const safe = (label, fn) => {
+          try {
+            const dispose = fn();
+            return typeof dispose === 'function' ? dispose : () => {};
+          } catch (error) {
+            console.error(`dsh-git-gui: ${label} unavailable:`, error);
+            return () => {};
+          }
+        };
 
+        // Right-sidebar tab type and body. `sidebar.right.pane.tab` is declared
+        // by ui-sidebar-right, so wait for its `rightbar` owner through
+        // slots.inject: the callback re-runs whenever the owner reappears, and
+        // by then sidebarRightTabs is registered too.
         disposers.push(
-          ctx.slots.register(
-            { name: 'sidebar.right.pane.tab', key: '@local/dsh-git-gui' },
-            (props) => h(GitPanel, { ...props, ctx, t, getSessionId }),
+          safe('rightbar seat', () =>
+            ctx.slots.inject('rightbar', () => {
+              const inner = [];
+              const tabs = ctx.get('sidebarRightTabs');
+              if (tabs) {
+                try {
+                  inner.push(
+                    tabs.register({
+                      id: '@local/dsh-git-gui',
+                      kind: 'git-gui',
+                      title: () => t('tabTitle'),
+                      guide: [{ id: 'git', label: t('tabTitle'), description: t('guideDesc') }],
+                    }),
+                  );
+                } catch (error) {
+                  console.error('dsh-git-gui: tab type registration failed:', error);
+                }
+              } else {
+                console.error('dsh-git-gui: sidebarRightTabs service unavailable');
+              }
+              inner.push(
+                ctx.slots.register(
+                  { name: 'sidebar.right.pane.tab', key: '@local/dsh-git-gui' },
+                  (props) => h(GitPanel, { ...props, ctx, t, getSessionId }),
+                ),
+              );
+              return () => {
+                for (const dispose of inner) {
+                  try {
+                    if (typeof dispose === 'function') dispose();
+                  } catch {
+                    /* ignore */
+                  }
+                }
+              };
+            }),
           ),
         );
 
         // Global main-panel entry: left sidebar icon + full-width panel.
         disposers.push(
-          ctx.slots.register(
-            { name: 'sidebar.panellist', id: 'git-gui', order: 20, label: () => t('panelLabel') },
-            PanelIcon,
+          safe('sidebar.panellist', () =>
+            ctx.slots.register(
+              { name: 'sidebar.panellist', id: 'git-gui', order: 20, label: () => t('panelLabel') },
+              PanelIcon,
+            ),
           ),
         );
         disposers.push(
-          ctx.slots.register(
-            { name: 'main', key: 'git-gui' },
-            (props) => h(GitPanel, { ...props, ctx, t, getSessionId }),
+          safe('main panel', () =>
+            ctx.slots.register(
+              { name: 'main', key: 'git-gui' },
+              (props) => h(GitPanel, { ...props, ctx, t, getSessionId }),
+            ),
           ),
         );
 
