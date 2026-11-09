@@ -570,7 +570,7 @@ window.__ModuleLoader__.load({
     }
 
     return {
-      inject: ['slots'],
+      inject: ['slots', 'locale', 'sidebarRightTabs'],
       apply(ctx) {
         const disposers = [];
         const report = (stage, detail) => rawReport(stage, detail);
@@ -647,48 +647,37 @@ window.__ModuleLoader__.load({
           }
         };
 
-        // Right-sidebar tab type and body. `sidebar.right.pane.tab` is a
-        // session-scoped keyed slot declared by ui-sidebar-right: register
-        // through slots.inject on that slot itself, and by the time the
-        // injection runs sidebarRightTabs is available too.
+        // Right-sidebar tab type: the registry is a declared inject service
+        // (loader guarantees ui-sidebar-right activated first).
+        const tabs = ctx.sidebarRightTabs ?? ctx.get('sidebarRightTabs');
+        if (tabs) {
+          try {
+            disposers.push(
+              tabs.register({
+                id: '@local/dsh-git-gui',
+                kind: 'git-gui',
+                title: () => t('tabTitle'),
+                guide: [{ id: 'git', label: t('tabTitle'), description: t('guideDesc') }],
+              }),
+            );
+            report('tab-type-ok', '');
+          } catch (error) {
+            report('tab-type-failed', (error && error.message) || error);
+          }
+        } else {
+          report('tab-type-missing-service', '');
+        }
+
+        // Right-sidebar tab body: session-scoped keyed slot owned by
+        // ui-sidebar-right; register through slots.inject on the slot itself.
         disposers.push(
           safe('rightbar seat', () =>
-            ctx.slots.inject('sidebar.right.pane.tab', () => {
-              const inner = [];
-              const tabs = ctx.get('sidebarRightTabs');
-              if (tabs) {
-                try {
-                  inner.push(
-                    tabs.register({
-                      id: '@local/dsh-git-gui',
-                      kind: 'git-gui',
-                      title: () => t('tabTitle'),
-                      guide: [{ id: 'git', label: t('tabTitle'), description: t('guideDesc') }],
-                    }),
-                  );
-                } catch (error) {
-                  report('tab-type-failed', (error && error.message) || error);
-                  console.error('dsh-git-gui: tab type registration failed:', error);
-                }
-              } else {
-                report('tab-type-missing-service', '');
-              }
-              inner.push(
-                ctx.slots.register(
-                  { name: 'sidebar.right.pane.tab', key: '@local/dsh-git-gui' },
-                  (props) => h(GitPanel, { ...props, ctx, t, getSessionId }),
-                ),
-              );
-              return () => {
-                for (const dispose of inner) {
-                  try {
-                    if (typeof dispose === 'function') dispose();
-                  } catch {
-                    /* ignore */
-                  }
-                }
-              };
-            }),
+            ctx.slots.inject('sidebar.right.pane.tab', () =>
+              ctx.slots.register(
+                { name: 'sidebar.right.pane.tab', key: '@local/dsh-git-gui' },
+                (props) => h(GitPanel, { ...props, ctx, t, getSessionId }),
+              ),
+            ),
           ),
         );
 
