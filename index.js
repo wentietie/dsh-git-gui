@@ -8,8 +8,9 @@
  * bridge applies) before any work runs.
  */
 import { spawn } from 'node:child_process';
-import { readdirSync, statSync } from 'node:fs';
-import { isAbsolute, join } from 'node:path';
+import { appendFileSync, readdirSync, statSync } from 'node:fs';
+import { dirname, isAbsolute, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
 const MAX_ERR_BYTES = 64 * 1024;
@@ -265,6 +266,20 @@ export function apply(ctx) {
     const repo = await resolveRepo(cwd);
     if (!repo.ok) return { ok: false, error: repo.error, notRepo: true };
     const root = repo.root;
+
+    if (action === 'client-report') {
+      try {
+        const logPath = join(dirname(fileURLToPath(import.meta.url)), 'client-debug.log');
+        appendFileSync(
+          logPath,
+          `${new Date().toISOString()} ${JSON.stringify(input.payload ?? input)}\n`,
+          'utf8',
+        );
+      } catch {
+        /* diagnostics only */
+      }
+      return { ok: true };
+    }
 
     if (action === 'status') {
       const result = await runGit(root, ['status', '--porcelain=v1', '-z', '-b']);

@@ -557,6 +557,14 @@ window.__ModuleLoader__.load({
       inject: ['slots'],
       apply(ctx) {
         const disposers = [];
+        const report = (stage, detail) => {
+          try {
+            api({ action: 'client-report', payload: { stage, detail: String(detail ?? '') } });
+          } catch {
+            /* diagnostics only */
+          }
+        };
+        report('apply-enter', `has-slots=${Boolean(ctx.get('slots'))}`);
         const locale = ctx.get('locale');
         let t = (key) => DICTS.en[key] ?? key;
         if (locale) {
@@ -620,8 +628,10 @@ window.__ModuleLoader__.load({
         const safe = (label, fn) => {
           try {
             const dispose = fn();
+            report(`${label}-ok`, '');
             return typeof dispose === 'function' ? dispose : () => {};
           } catch (error) {
+            report(`${label}-failed`, (error && error.message) || error);
             console.error(`dsh-git-gui: ${label} unavailable:`, error);
             return () => {};
           }
@@ -690,6 +700,7 @@ window.__ModuleLoader__.load({
         );
 
         return () => {
+          report('dispose', '');
           for (const dispose of disposers) {
             try {
               if (typeof dispose === 'function') dispose();
