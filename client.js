@@ -15,6 +15,7 @@ window.__ModuleLoader__.load({
     const DICTS = {
       en: {
         tabTitle: 'Git',
+        panelLabel: 'Git changes',
         guideDesc: 'Review changes, diff files, and commit',
         refresh: 'Refresh',
         changes: 'Changes',
@@ -40,6 +41,7 @@ window.__ModuleLoader__.load({
       },
       zh: {
         tabTitle: 'Git',
+        panelLabel: 'Git 修改',
         guideDesc: '查看修改、对比 diff 并提交',
         refresh: '刷新',
         changes: '修改',
@@ -526,6 +528,31 @@ window.__ModuleLoader__.load({
       );
     }
 
+    function PanelIcon() {
+      // 16px branch glyph, currentColor so selected/hover states apply.
+      return h(
+        'svg',
+        {
+          viewBox: '0 0 16 16',
+          width: 16,
+          height: 16,
+          'aria-hidden': true,
+          style: { display: 'block', flex: 'none' },
+        },
+        h(
+          'g',
+          { fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round' },
+          h('path', { d: 'M4.5 12V5.5' }),
+          h('path', { d: 'M4.5 5.5c0-2.5 4-2.5 7-1.5' }),
+          h('path', { d: 'M11.5 7v5' }),
+        ),
+        h('circle', { cx: 4.5, cy: 13.2, r: 1.6, fill: 'currentColor' }),
+        h('circle', { cx: 4.5, cy: 4.3, r: 1.6, fill: 'currentColor' }),
+        h('circle', { cx: 11.5, cy: 4.3, r: 1.6, fill: 'currentColor' }),
+        h('circle', { cx: 11.5, cy: 13.2, r: 1.6, fill: 'currentColor' }),
+      );
+    }
+
     return {
       inject: ['slots'],
       apply(ctx) {
@@ -568,6 +595,20 @@ window.__ModuleLoader__.load({
         disposers.push(
           ctx.slots.register(
             { name: 'sidebar.right.pane.tab', key: '@local/dsh-git-gui' },
+            (props) => h(GitPanel, { ...props, ctx, t }),
+          ),
+        );
+
+        // Global main-panel entry: left sidebar icon + full-width panel.
+        disposers.push(
+          ctx.slots.register(
+            { name: 'sidebar.panellist', id: 'git-gui', order: 20, label: () => t('panelLabel') },
+            PanelIcon,
+          ),
+        );
+        disposers.push(
+          ctx.slots.register(
+            { name: 'main', key: 'git-gui' },
             (props) => h(GitPanel, { ...props, ctx, t }),
           ),
         );
