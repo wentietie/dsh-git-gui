@@ -16,6 +16,7 @@ window.__ModuleLoader__.load({
       en: {
         tabTitle: 'Git',
         panelLabel: 'Git changes',
+        viewChanges: 'Changes',
         guideDesc: 'Review changes, diff files, and commit',
         refresh: 'Refresh',
         changes: 'Changes',
@@ -42,6 +43,7 @@ window.__ModuleLoader__.load({
       zh: {
         tabTitle: 'Git',
         panelLabel: 'Git 修改',
+        viewChanges: '变更',
         guideDesc: '查看修改、对比 diff 并提交',
         refresh: '刷新',
         changes: '修改',
@@ -681,27 +683,29 @@ window.__ModuleLoader__.load({
           ),
         );
 
-        // Global main-panel entry: left sidebar icon + full-width panel.
-        // These slots are declared by ui-sidebar/ui-layout inside their own
-        // children tables, so registrations ride the owner declaration via
-        // slots.inject (the same pattern the shipped plugins use).
+        // Conversation tab after Chat / Trajectory: shows the session's
+        // repository changes. inject(sessionId) supplies the session directly.
         disposers.push(
-          safe('sidebar.panellist', () =>
-            ctx.slots.inject('sidebar.panellist', () =>
-              ctx.slots.register(
-                { name: 'sidebar.panellist', id: 'git-gui', order: 20, label: () => t('panelLabel') },
-                PanelIcon,
-              ),
-            ),
-          ),
-        );
-        disposers.push(
-          safe('main panel', () =>
-            ctx.slots.inject('main', () =>
-              ctx.slots.register(
-                { name: 'main', key: 'git-gui' },
-                (props) => h(GitPanel, { ...props, ctx, t, getSessionId }),
-              ),
+          safe('conversation.view tab', () =>
+            ctx.slots.inject(
+              'conversation.view',
+              () =>
+                ctx.slots.register(
+                  {
+                    name: 'conversation.view',
+                    id: 'git-changes',
+                    order: 30,
+                    label: () => t('viewChanges'),
+                    inject: (sessionId) => ({ gitSessionId: sessionId }),
+                  },
+                  (props) =>
+                    h(GitPanel, {
+                      ...props,
+                      ctx,
+                      t,
+                      getSessionId: () => props.gitSessionId ?? getSessionId(),
+                    }),
+                ),
             ),
           ),
         );
